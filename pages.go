@@ -218,24 +218,26 @@ func newGuildView(ctx context.Context, state *deleteState) *guildView {
 	l.list.list.SetWrapAround(true)
 	l.list.list.ShowSecondaryText(false)
 	l.list.list.SetSelectedFunc(func(_ int, item *cview.ListItem) {
-		guildID := item.GetReference().(discord.GuildID)
-		guild := l.state.guilds[guildID]
-
-		_, selected := l.state.selected[guildID]
-		if selected {
-			delete(l.state.selected, guildID)
-			item.SetMainText(guild.Name)
-		} else {
-			l.state.selected[guildID] = true
-			item.SetMainText(guild.Name + " (*)")
-		}
+		l.Select(item)
 	})
 
 	l.list.centerBox = centerPrimitive(l.list.list, 100, 0)
 
 	reload := cview.NewButton("Reload")
 	reload.SetSelectedFunc(l.Reload)
-	reload.SetBorder(false)
+
+	selectAll := cview.NewButton("Toggle Selection")
+	selectAll.SetSelectedFunc(func() {
+		for _, item := range l.list.items {
+			l.Select(item)
+		}
+	})
+
+	buttons := cview.NewFlex()
+	buttons.SetDirection(cview.FlexColumn)
+	buttons.AddItem(reload, 0, 1, true)
+	buttons.AddItem(nil, 3, 0, false)
+	buttons.AddItem(selectAll, 0, 1, true)
 
 	search := cview.NewInputField()
 	search.SetPlaceholder("Search guilds...")
@@ -243,11 +245,25 @@ func newGuildView(ctx context.Context, state *deleteState) *guildView {
 
 	l.Flex = cview.NewFlex()
 	l.Flex.SetDirection(cview.FlexRow)
-	l.Flex.AddItem(centerPrimitive(reload, 10, 0), 1, 0, true)
+	l.Flex.AddItem(centerPrimitive(buttons, 60, 1), 3, 0, true)
 	l.Flex.AddItem(centerPrimitive(search, 80, 1), 3, 0, true)
 	l.Flex.AddItem(l.list, 0, 1, true)
 
 	return &l
+}
+
+func (l *guildView) Select(item *cview.ListItem) {
+	guildID := item.GetReference().(discord.GuildID)
+	guild := l.state.guilds[guildID]
+
+	_, selected := l.state.selected[guildID]
+	if selected {
+		delete(l.state.selected, guildID)
+		item.SetMainText(guild.Name)
+	} else {
+		l.state.selected[guildID] = true
+		item.SetMainText(guild.Name + " (*)")
+	}
 }
 
 func (l *guildView) Reload() {
@@ -322,29 +338,6 @@ func containsFold(i, j string) bool {
 	return strings.Contains(strings.ToLower(i), strings.ToLower(j))
 }
 
-/*
-type errorModal struct {
-	*cview.Modal
-}
-
-func newErrorModal(err error, prefix string, showOK bool) *errorModal {
-	report := cview.NewModal()
-	report.SetText(prefix + ":\n" + err.Error())
-
-	if showOK {
-		report.AddButtons([]string{"OK"})
-	}
-
-	return &errorModal{report}
-}
-
-func (m *errorModal) SetOKFunc(f func()) {
-	m.SetDoneFunc(func(ix int, label string) {
-		f()
-	})
-}
-*/
-
 type deletePage struct {
 	cview.Primitive
 	from    *cview.InputField
@@ -359,6 +352,8 @@ type deletePage struct {
 		to    time.Time
 		query string
 	}
+
+	stopDeleting context.CancelFunc
 }
 
 const dateFmt = "2006/01/02 15:04" // YYYY/MM/DD HH:MM
@@ -405,10 +400,17 @@ func newDeletePage(ctx context.Context, state *deleteState) *deletePage {
 	calculate.SetSelectedFunc(d.calculate)
 
 	delete := cview.NewButton("Delete")
+	delete.SetSelectedFunc(d.delete)
 	delete.SetBackgroundColor(tcell.ColorRed)
 
 	cancel := cview.NewButton("Cancel")
 	cancel.SetBackgroundColor(tcell.ColorBlue)
+	cancel.SetSelectedFunc(func() {
+		if d.stopDeleting != nil {
+			d.stopDeleting()
+			d.stopDeleting = nil
+		}
+	})
 
 	buttons := cview.NewFlex()
 	buttons.SetDirection(cview.FlexColumn)
@@ -438,38 +440,106 @@ func pad(len int, str string) string {
 	return fmt.Sprintf("%[1]*[2]s ", len-1, str)
 }
 
-func (d *deletePage) calculate() {
-	log := loggerFromContext(d.ctx)
-	client := apiFromContext(d.ctx)
-	guildIDs := d.state.SelectedIDs()
-
-	var count uint
-
-	for _, guildID := range guildIDs {
-		guild := d.state.guilds[guildID]
-		log.Printf("Checking guild %q", guild.Name)
-
-		data := api.SearchData{
-			Content:  d.state.query,
-			AuthorID: d.state.selfID,
-		}
-		if !d.state.from.IsZero() {
-			data.MinID = discord.MessageID(discord.NewSnowflake(d.state.from))
-		}
-		if !d.state.to.IsZero() {
-			data.MaxID = discord.MessageID(discord.NewSnowflake(d.state.to))
-		}
-
-		r, err := client.Search(guildID, data)
-		if err != nil {
-			log.Println("    error:", err)
-		} else {
-			log.Println("    found", r.TotalResults, "messages")
-			count += r.TotalResults
-		}
+func (d *deletePage) searchData() api.SearchData {
+	data := api.SearchData{
+		Content:  d.state.query,
+		AuthorID: d.state.selfID,
 	}
-
-	log.Println("Total:", count, "messages to be deleted.")
+	if !d.state.from.IsZero() {
+		data.MinID = discord.MessageID(discord.NewSnowflake(d.state.from))
+	}
+	if !d.state.to.IsZero() {
+		data.MaxID = discord.MessageID(discord.NewSnowflake(d.state.to))
+	}
+	return data
 }
 
-func (d *deletePage) delete() {}
+func (d *deletePage) calculate() {
+	log := loggerFromContext(d.ctx)
+	guildIDs := d.state.SelectedIDs()
+
+	data := d.searchData()
+
+	ctx, cancel := context.WithCancel(d.ctx)
+	d.stopDeleting = cancel
+
+	go func() {
+		defer cancel()
+		client := apiFromContext(d.ctx).WithContext(ctx)
+
+		var count uint
+
+		for _, guildID := range guildIDs {
+			guild := d.state.guilds[guildID]
+			log.Printf("Checking guild %q (%d)", guild.Name, guildID)
+
+			r, err := client.Search(guildID, data)
+			if err != nil {
+				log.Println("    error:", err)
+			} else {
+				log.Println("    found", r.TotalResults, "messages")
+				count += r.TotalResults
+			}
+		}
+
+		log.Println("Total:", count, "messages to be deleted.")
+	}()
+}
+
+func (d *deletePage) delete() {
+	log := loggerFromContext(d.ctx)
+	guildIDs := d.state.SelectedIDs()
+
+	data := d.searchData()
+
+	ctx, cancel := context.WithCancel(d.ctx)
+	d.stopDeleting = cancel
+
+	go func() {
+		defer cancel()
+		client := apiFromContext(d.ctx).WithContext(ctx)
+
+		for _, guildID := range guildIDs {
+			guild := d.state.guilds[guildID]
+			log.Printf("Working on guild %q (%d)...", guild.Name, guildID)
+
+			var deleted int
+			hasMore := true
+
+			for hasMore {
+				r, err := client.Search(guildID, data)
+				if err != nil {
+					log.Println("    error:", err)
+					break
+				}
+
+				// Iterate until we're out of all messages matching the search
+				// data.
+				hasMore = r.TotalResults > 0
+
+				for _, msgs := range r.Messages {
+					if len(msgs) == 0 {
+						continue
+					}
+
+					msg := msgs[0]
+					deleted++
+
+					err := client.DeleteMessage(msg.ChannelID, msg.ID, "")
+					if err != nil {
+						log.Printf(
+							"    cannot delete message sent at %v: %v",
+							msg.Timestamp.Time(), err)
+						log.Printf(
+							"    content: %q",
+							msg.Content)
+					} else {
+						log.Printf(
+							"    deleted message sent at %v (%d/%d)",
+							msg.Timestamp.Time(), deleted, r.TotalResults)
+					}
+				}
+			}
+		}
+	}()
+}
