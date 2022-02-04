@@ -2,6 +2,7 @@ package main
 
 import (
 	"code.rocketnine.space/tslocum/cview"
+	"github.com/gdamore/tcell/v2"
 )
 
 // centerBox centers the primitive.
@@ -29,3 +30,9 @@ func (c centerBox) SetRect(x, y, w, h int) {
 
 	c.Primitive.SetRect(x, y, w, h)
 }
+
+type selfDestruct struct {
+	cview.Box
+}
+
+func (s selfDestruct) Draw(tcell.Screen) {}

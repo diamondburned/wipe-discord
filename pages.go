@@ -48,9 +48,11 @@ func newMainPage(ctx context.Context) *mainPage {
 	// After many years, the API is still fully of unexported fields that make
 	// using the primitives a miserable experience.
 	m.tabs.TabbedPanels = cview.NewTabbedPanels()
+	m.tabs.Switcher.SetPadding(0, 0, 2, 2)
 	m.tabs.AddTab("login", "Login", m.tabs.login)
 	m.tabs.AddTab("guilds", "Guilds", m.tabs.guilds)
 	m.tabs.AddTab("delete", "Delete", m.tabs.delete)
+	m.tabs.AddTab("close", "Close", newClosePage(ctx))
 
 	m.Flex = cview.NewFlex()
 	m.Flex.SetDirection(cview.FlexRow)
@@ -84,6 +86,25 @@ func newConsoleView() *consoleView {
 
 func (c *consoleView) WithLogger(ctx context.Context) context.Context {
 	return context.WithValue(ctx, loggerKey, c.logger)
+}
+
+type closePage struct {
+	*cview.Modal
+}
+
+func newClosePage(ctx context.Context) *closePage {
+	modal := cview.NewModal()
+	modal.SetTitle("Close")
+	modal.SetText("Are you sure?")
+	modal.AddButtons([]string{"Yes"})
+	modal.SetDoneFunc(func(_ int, v string) {
+		if v == "Yes" {
+			app := appFromContext(ctx)
+			app.Stop()
+		}
+	})
+
+	return &closePage{modal}
 }
 
 type loginPage struct {
