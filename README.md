@@ -10,10 +10,10 @@ go install github.com/diamondburned/wipe-discord
 
 or download it from [goblin.reaper.im](https://goblin.reaper.im):
 
-- [Windows x86/64](https://gobinaries.com/binary/github.com/diamondburned/wipe-discord?os=windows&arch=amd64&version=latest)
-- [Linux x86/64](https://gobinaries.com/binary/github.com/diamondburned/wipe-discord?os=linux&arch=amd64&version=latest)
-- [Linux aarch64](https://gobinaries.com/binary/github.com/diamondburned/wipe-discord?os=linux&arch=arm64&version=latest)
-- [Darwin aarch64](https://gobinaries.com/binary/github.com/diamondburned/wipe-discord?os=darwin&arch=arm64&version=latest)
+- [Windows x86/64](https://goblin.reaper.im/binary/github.com/diamondburned/wipe-discord?os=windows&arch=amd64&version=latest)
+- [Linux x86/64](https://goblin.reaper.im/binary/github.com/diamondburned/wipe-discord?os=linux&arch=amd64&version=latest)
+- [Linux aarch64](https://goblin.reaper.im/binary/github.com/diamondburned/wipe-discord?os=linux&arch=arm64&version=latest)
+- [Darwin aarch64](https://goblin.reaper.im/binary/github.com/diamondburned/wipe-discord?os=darwin&arch=arm64&version=latest)
 
 ## Running
 
