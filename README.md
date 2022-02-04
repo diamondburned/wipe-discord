@@ -24,3 +24,9 @@ Run the binary inside a terminal.
 ![login screen](https://matrix-client.matrix.org/_matrix/media/r0/download/matrix.org/EPrNFZrZVuFjAunMIypFfmvV/clipboard.png?allow_remote=true)
 
 ![delete screen](https://matrix-client.matrix.org/_matrix/media/r0/download/matrix.org/QxKAKoXUAUCIjIfsnFodgGUF/clipboard.png?allow_remote=true)
+
+## Disclaimer
+
+I do not take any responsibility for what happens to your Discord account. Using
+this application or anything not the official client and your 2 hands can result
+in a ban off the platform. **USE AT YOUR OWN RISK.**
