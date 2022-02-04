@@ -29,7 +29,7 @@ type mainPage struct {
 func newMainPage(ctx context.Context) *mainPage {
 	m := mainPage{}
 
-	m.console = newConsoleView()
+	m.console = newConsoleView(ctx)
 	ctx = m.console.WithLogger(ctx)
 
 	m.tabs.login = newLoginPage(ctx)
@@ -66,16 +66,20 @@ type consoleView struct {
 	*cview.Frame
 	text   *cview.TextView
 	logger *log.Logger
+	redraw func()
 }
 
-func newConsoleView() *consoleView {
+func newConsoleView(ctx context.Context) *consoleView {
 	c := consoleView{}
 	c.text = cview.NewTextView()
 	c.text.SetDynamicColors(false)
 	c.text.ScrollToEnd()
 	c.text.SetText("Begin console.\n")
 
-	c.logger = log.New(c.text, "", log.LstdFlags)
+	c.logger = log.New(&c, "", log.LstdFlags)
+
+	app := appFromContext(ctx)
+	c.redraw = func() { app.Draw(c.text) }
 
 	c.Frame = cview.NewFrame(c.text)
 	c.Frame.SetBorder(true)
@@ -86,6 +90,12 @@ func newConsoleView() *consoleView {
 
 func (c *consoleView) WithLogger(ctx context.Context) context.Context {
 	return context.WithValue(ctx, loggerKey, c.logger)
+}
+
+func (c *consoleView) Write(b []byte) (int, error) {
+	n, err := c.text.Write(b)
+	c.redraw()
+	return n, err
 }
 
 type closePage struct {
