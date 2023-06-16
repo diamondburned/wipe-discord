@@ -549,6 +549,7 @@ func (d *deletePage) delete() {
 				hasMore = r.TotalResults > 0
 
 				for _, msgs := range r.Messages {
+					hasMore = false
 					if len(msgs) == 0 {
 						continue
 					}
@@ -556,6 +557,13 @@ func (d *deletePage) delete() {
 					msg := msgs[0]
 					deleted++
 
+					if msg.Author.ID != d.state.selfID {
+						log.Printf(
+							"    cannot delete message sent at %v: message is a bot's response to an interaction",
+							msg.Timestamp.Time())
+						continue
+					}
+					hasMore = true
 					err := client.DeleteMessage(msg.ChannelID, msg.ID, "")
 					if err != nil {
 						log.Printf(
