@@ -475,6 +475,7 @@ func (d *deletePage) searchData() api.SearchData {
 	data := api.SearchData{
 		Content:  d.state.query,
 		AuthorID: d.state.selfID,
+		IncludeNSFW: true,
 	}
 	if !d.state.from.IsZero() {
 		data.MinID = discord.MessageID(discord.NewSnowflake(d.state.from))
